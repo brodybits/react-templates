@@ -1,0 +1,4 @@
+<dl rt-repeat-inside="word in this.state.words">
+    <dt>{word.word}</dt>
+    <dd>{word.definition}</dd>
+</dl>

@@ -100,7 +100,7 @@ function errorEqualMessage(err, file) {
 }
 
 test('conversion test', function (t) {
-    var files = ['div.rt', 'test.rt', 'repeat.rt', 'inputs.rt', 'require.rt'];
+    var files = ['div.rt', 'test.rt', 'repeat.rt', 'inputs.rt', 'require.rt', 'repeat-inside.rt'];
     t.plan(files.length);
     files.forEach(check);
 
