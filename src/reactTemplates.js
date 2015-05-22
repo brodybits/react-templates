@@ -13,6 +13,7 @@ var RTCodeError = rtError.RTCodeError;
 
 var repeatTemplate = _.template('_.map(<%= collection %>,<%= repeatFunction %>.bind(<%= repeatBinds %>))');
 var ifTemplate = _.template('((<%= condition %>)?(<%= body %>):null)');
+var repeatInnerTemplate = _.template('_.map(<%= collection %>,<%= repeatInnerFunction %>.bind(<%= repeatInnerBinds %>))');
 var propsTemplateSimple = _.template('_.assign({}, <%= generatedProps %>, <%= rtProps %>)');
 var propsTemplate = _.template('mergeProps( <%= generatedProps %>, <%= rtProps %>)');
 var propsMergeFunction = 'function mergeProps(inline,external) {\n var res = _.assign({},inline,external)\nif (inline.hasOwnProperty(\'style\')) {\n res.style = _.defaults(res.style, inline.style);\n}\n' +
@@ -24,6 +25,7 @@ var simpleTagTemplate = _.template('<%= name %>(<%= props %><%= children %>)');
 var tagTemplate = _.template('<%= name %>.apply(this, [<%= props %><%= children %>])');
 var simpleTagTemplateCreateElement = _.template('React.createElement(<%= name %>,<%= props %><%= children %>)');
 var tagTemplateCreateElement = _.template('React.createElement.apply(this, [<%= name %>,<%= props %><%= children %>])');
+var tagTemplateCreateRepeatInnerElement = _.template('React.createElement.apply(this, [<%= name %>,<%= props %>,<%= innerbody %>])');
 var commentTemplate = _.template(' /* <%= data %> */ ');
 
 var templateAMDTemplate = _.template("define(<%= name ? '\"'+name + '\", ' : '' %>[<%= requirePaths %>], function (<%= requireNames %>) {\n'use strict';\n <%= injectedFunctions %>\nreturn function(){ return <%= body %>};\n});");
@@ -48,6 +50,7 @@ var templates = {
 
 var htmlSelfClosingTags = ['area', 'base', 'br', 'col', 'command', 'embed', 'hr', 'img', 'input', 'keygen', 'link', 'meta', 'param', 'source', 'track', 'wbr'];
 
+var repeatInnerProp = 'rt-repeat-inside';
 var templateProp = 'rt-repeat';
 var ifProp = 'rt-if';
 var classSetProp = 'rt-class';
@@ -306,6 +309,18 @@ function convertHtmlToReact(node, context) {
             });
         }
 
+        if (node.attribs[repeatInnerProp]) {
+            var arr = node.attribs[repeatInnerProp].split(' in ');
+            if (arr.length !== 2) {
+                throw RTCodeError.build("rt-repeat-inner invalid 'in' expression '" + node.attribs[repeatInnerProp] + "'", context, node);
+            }
+            data.item = arr[0].trim();
+            data.collection = arr[1].trim();
+            validateJS(data.item, node, context);
+            validateJS(data.collection, node, context);
+            stringUtils.addIfMissing(context.boundParams, data.item);
+            stringUtils.addIfMissing(context.boundParams, data.item + 'Index');
+        }
         if (node.attribs[templateProp]) {
             var arr = node.attribs[templateProp].split(' in ');
             if (arr.length !== 2) {
@@ -334,12 +349,21 @@ function convertHtmlToReact(node, context) {
         if (node.attribs[ifProp]) {
             data.condition = node.attribs[ifProp].trim();
         }
+
         data.children = node.children ? concatChildren(_.map(node.children, function (child) {
             var code = convertHtmlToReact(child, context);
             validateJS(code, child, context);
             return code;
         })) : '';
 
+        if (node.attribs[repeatInnerProp]) {
+            data.repeatInnerFunction = generateInjectedFunc(context, 'repeat' + stringUtils.capitalize(data.item), 'return [' + data.children.substring(1) + ']');
+            data.repeatInnerBinds = ['this'].concat(_.reject(context.boundParams, function (param) {
+                return (param === data.item || param === data.item + 'Index');
+            }));
+            data.innerbody = repeatInnerTemplate(data);
+            data.body = tagTemplateCreateRepeatInnerElement(data);
+        } else
         if (hasNonSimpleChildren(node)) {
             data.body = shouldUseCreateElement(context) ? tagTemplateCreateElement(data) : tagTemplate(data);
         } else {
